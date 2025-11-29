@@ -89,7 +89,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "last_predefined_voice": None,  # Filename of the last used predefined voice.
         "last_reference_file": None,  # Filename of the last used reference audio file.
         "last_seed": 0,  # Last used generation seed.
-        "last_chunk_size": 400,  # Last used chunk size for text splitting in UI.
+        "last_chunk_size": 120,  # Last used chunk size for text splitting in UI.
         "last_split_text_enabled": True,  # Whether text splitting was last enabled in UI.
         "hide_chunk_warning": False,  # Flag to hide the chunking warning modal.
         "hide_generation_warning": False,  # Flag to hide the general generation quality notice modal.
