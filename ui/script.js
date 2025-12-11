@@ -1268,10 +1268,14 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         try {
             // Update player immediately for "instant" feel
-            console.log('Loading new buffer into wavesurfer');
-            wavesurfer.loadDecodedBuffer(newBuffer);
+            console.log('Converting buffer to WAV blob');
+            const wavBlob = audioBufferToWav(newBuffer);
+            const blobUrl = URL.createObjectURL(wavBlob);
 
-            // Remove all regions
+            console.log('Loading new audio into wavesurfer');
+            await wavesurfer.load(blobUrl);
+
+            // Remove all regions after the new audio loads
             wsRegions.clearRegions();
             showNotification('Audio edited successfully!', 'success');
 
