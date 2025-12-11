@@ -664,6 +664,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             plugins: [wsRegions, wsTimeline]
         });
 
+        // Enable drag selection to allow user to create regions
+        wsRegions.enableDragSelection({
+            color: 'rgba(99, 102, 241, 0.3)',
+        });
+
         // Add Regions events
         wsRegions.on('region-created', region => {
             region.setOptions({ color: 'rgba(99, 102, 241, 0.3)' });
