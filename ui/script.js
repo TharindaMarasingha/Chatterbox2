@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     let listenersAttached = false;
     let isGenerating = false;
     let wavesurfer = null;
-    let wsRegions = null; // Regions plugin instance
     let currentAudioBlobUrl = null;
     let saveStateTimeout = null;
 
@@ -78,8 +77,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     const configStatus = document.getElementById('config-status');
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const audioPlayerContainer = document.getElementById('audio-player-container');
-
-
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingMessage = document.getElementById('loading-message');
     const loadingStatusText = document.getElementById('loading-status');
@@ -498,78 +495,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
     if (splitTextToggle) toggleChunkControlsVisibility();
 
-    // --- Audio History for Undo/Redo ---
-    let audioHistory = []; // Stack of audio blob URLs
-    let historyIndex = -1; // Current position in history
-    const MAX_HISTORY = 20; // Limit history to prevent memory issues
-
-    function updateHistoryButtons() {
-        const undoBtn = document.getElementById('undo-btn');
-        const redoBtn = document.getElementById('redo-btn');
-        if (undoBtn) undoBtn.disabled = historyIndex <= 0;
-        if (redoBtn) redoBtn.disabled = historyIndex >= audioHistory.length - 1;
-    }
-
-    function addToHistory(blobUrl) {
-        // Remove any future history if we're not at the end
-        if (historyIndex < audioHistory.length - 1) {
-            // Revoke URLs that will be removed
-            for (let i = historyIndex + 1; i < audioHistory.length; i++) {
-                URL.revokeObjectURL(audioHistory[i]);
-            }
-            audioHistory = audioHistory.slice(0, historyIndex + 1);
-        }
-
-        audioHistory.push(blobUrl);
-        historyIndex++;
-
-        // Limit history size
-        if (audioHistory.length > MAX_HISTORY) {
-            const removed = audioHistory.shift();
-            URL.revokeObjectURL(removed);
-            historyIndex--;
-        }
-
-        updateHistoryButtons();
-        console.log('History added. Index:', historyIndex, 'Length:', audioHistory.length);
-    }
-
-    async function performUndo() {
-        if (historyIndex > 0) {
-            historyIndex--;
-            const blobUrl = audioHistory[historyIndex];
-            console.log('Undo to index:', historyIndex);
-            await wavesurfer.load(blobUrl);
-            wsRegions.clearRegions();
-            updateHistoryButtons();
-            showNotification('Undo successful', 'info');
-        }
-    }
-
-    async function performRedo() {
-        if (historyIndex < audioHistory.length - 1) {
-            historyIndex++;
-            const blobUrl = audioHistory[historyIndex];
-            console.log('Redo to index:', historyIndex);
-            await wavesurfer.load(blobUrl);
-            wsRegions.clearRegions();
-            updateHistoryButtons();
-            showNotification('Redo successful', 'info');
-        }
-    }
-
     // --- Audio Player (WaveSurfer) ---
     function initializeWaveSurfer(audioUrl, resultDetails = {}) {
-        // Reset history when loading new audio
-        audioHistory.forEach(url => URL.revokeObjectURL(url));
-        audioHistory = [];
-        historyIndex = -1;
-
         if (wavesurfer) {
             wavesurfer.unAll(); // Remove all event listeners before destroying
             wavesurfer.destroy();
             wavesurfer = null;
-            wsRegions = null;
         }
         if (currentAudioBlobUrl) {
             URL.revokeObjectURL(currentAudioBlobUrl);
@@ -579,73 +510,50 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Ensure the container is clean or re-created
         audioPlayerContainer.innerHTML = `
-            <div class="card-base">
+            <div class="audio-player-card">
                 <div class="p-6 sm:p-8">
-                    <div class="flex items-center justify-between mb-4">
-                        <h2 class="card-header mb-0">Audio Editor</h2>
-                        <div class="audio-player-info text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                            <span id="player-voice-mode" class="font-medium text-indigo-600 dark:text-indigo-400">--</span>
+                    <h2 class="card-header">Generated Audio</h2>
+                    <div class="mb-5"><div id="waveform" class="waveform-container"></div></div>
+                    <div class="audio-player-controls">
+                        <div class="audio-player-buttons">
+                            <button id="play-btn" class="btn-primary flex items-center" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg>
+                                <span>Play</span>
+                            </button>
+                            <a id="download-link" href="#" download="tts_output.wav" class="btn-secondary flex items-center opacity-50 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5">
+                                  <path fill-rule="evenodd" d="M10 3a.75.75 0 01.75.75v6.638l1.96-2.158a.75.75 0 111.08 1.04l-3.25 3.5a.75.75 0 01-1.08 0l-3.25-3.5a.75.75 0 111.08-1.04l1.96 2.158V3.75A.75.75 0 0110 3zM3.75 13a.75.75 0 01.75.75v.008c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V13.75a.75.75 0 011.5 0v.008c0 1.518-1.232 2.75-2.75 2.75h-8.5C4.232 16.5 3 15.268 3 13.75v-.008A.75.75 0 013.75 13z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Download</span>
+                            </a>
+                        </div>
+                        <div class="audio-player-info text-xs sm:text-sm">
+                            Mode: <span id="player-voice-mode" class="font-medium text-indigo-600 dark:text-indigo-400">--</span>
                             <span id="player-voice-file-details"></span>
-                            <span class="mx-1">•</span> <span id="audio-duration" class="font-medium tabular-nums">--:--</span>
+                            <span class="mx-1">•</span> Gen Time: <span id="player-gen-time" class="font-medium tabular-nums">--s</span>
+                            <span class="mx-1">•</span> Duration: <span id="audio-duration" class="font-medium tabular-nums">--:--</span>
                         </div>
-                    </div>
-
-                    <div class="audio-editor-wrapper">
-                        <!-- Toolbar -->
-                        <div class="audio-toolbar">
-                            <div class="toolbar-group">
-                                <button id="play-btn" class="toolbar-btn" title="Play/Pause" disabled>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <div class="toolbar-divider"></div>
-                                <button id="delete-region-btn" class="toolbar-btn" title="Delete Selected Region">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-3.536 6.19a.75.75 0 0 1 1.05-.143L12 11.58l4.122-2.507a.75.75 0 0 1 .786 1.29l-4.5 2.74a.75.75 0 0 1-.786 0l-4.5-2.74a.75.75 0 0 1-.143-1.05Z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button id="trim-region-btn" class="toolbar-btn" title="Crop to Selected Region">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M20.599 1.5c-.376 0-.743.111-1.055.32l-5.08 3.385a18.747 18.747 0 0 0-3.471 2.987 10.04 10.04 0 0 1 4.815 4.815 8.787 8.787 0 0 1 2.987-3.472l3.386-5.079A1.902 1.902 0 0 0 20.599 1.5Zm-8.3 14.025a18.76 18.76 0 0 0 1.896-1.207 8.026 8.026 0 0 0-4.513-4.513c-.375.643-.78 1.28-1.208 1.896.572.572 1.14 1.14 1.71 1.71l2.115 2.114Zm-4.135 4.136a6.727 6.727 0 0 0-1.952 1.306l-2.25 2.25a.75.75 0 0 1-1.06-1.06l2.25-2.25a6.727 6.727 0 0 0 1.306-1.952 15.908 15.908 0 0 1 1.706-1.706l-2.114-2.115c-.533-.534-1.101-1.068-1.71-1.637a20.088 20.088 0 0 1-3.14 3.799 10.032 10.032 0 0 0 4.225 3.372c.67.245 1.758.623 2.74 1.99ZM12.247 10.966c-.534.533-1.068 1.1-1.636 1.71a15.908 15.908 0 0 0 1.706 1.706c.609-.569 1.177-1.137 1.71-1.636l-1.78-1.78Z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <div class="toolbar-divider"></div>
-                                <button id="undo-btn" class="toolbar-btn" title="Undo" disabled>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.53 2.47a.75.75 0 0 1 0 1.06L4.81 8.25H15a6.75 6.75 0 0 1 0 13.5h-3a.75.75 0 0 1 0-1.5h3a5.25 5.25 0 1 0 0-10.5H4.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
-                                </button>
-                                <button id="redo-btn" class="toolbar-btn" title="Redo" disabled>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M14.47 2.47a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1 0 1.06l-6 6a.75.75 0 1 1-1.06-1.06l4.72-4.72H9a5.25 5.25 0 1 0 0 10.5h3a.75.75 0 0 1 0 1.5H9a6.75 6.75 0 0 1 0-13.5h10.19l-4.72-4.72a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
-                                </button>
-                            </div>
-
-                            <div class="toolbar-group">
-                                <div class="zoom-container">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-slate-500"><path fill-rule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401Z" clip-rule="evenodd" /></svg>
-                                    <input type="range" id="zoom-slider" class="zoom-slider" min="10" max="200" value="0" title="Zoom">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-slate-500"><path d="M10 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5A.75.75 0 0 1 10 2Z" /><path d="M10 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" /></svg>
-                                </div>
-                                <div class="toolbar-divider"></div>
-                                <a id="download-link" href="#" download="tts_output.wav" class="toolbar-btn opacity-50 pointer-events-none" title="Download">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v9.54l3.12-3.12a.75.75 0 1 1 1.06 1.06l-4.4 4.4a.75.75 0 0 1-1.06 0l-4.4-4.4a.75.75 0 0 1 1.06-1.06l3.12 3.12V3a.75.75 0 0 1 .75-.75Zm-7.75 14.5a.75.75 0 0 1 .75-.75h14a.75.75 0 1 1 0 1.5h-14a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" /></svg>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div id="timeline" class="border-b border-slate-700"></div>
-                        <div id="waveform" class="waveform-container"></div>
                     </div>
                 </div>
-            </div > `;
+            </div>`;
 
         // Re-select elements after recreating them
         const waveformDiv = audioPlayerContainer.querySelector('#waveform');
-        const timelineDiv = audioPlayerContainer.querySelector('#timeline');
         const playBtn = audioPlayerContainer.querySelector('#play-btn');
         const downloadLink = audioPlayerContainer.querySelector('#download-link');
         const playerModeSpan = audioPlayerContainer.querySelector('#player-voice-mode');
         const playerFileSpan = audioPlayerContainer.querySelector('#player-voice-file-details');
+        const playerGenTimeSpan = audioPlayerContainer.querySelector('#player-gen-time');
         const audioDurationSpan = audioPlayerContainer.querySelector('#audio-duration');
-        const zoomSlider = audioPlayerContainer.querySelector('#zoom-slider');
 
         const audioFilename = resultDetails.filename || (typeof audioUrl === 'string' ? audioUrl.split('/').pop() : 'tts_output.wav');
         if (downloadLink) {
             downloadLink.href = audioUrl;
             downloadLink.download = audioFilename;
+            const downloadTextSpan = downloadLink.querySelector('span'); // Target the span for text update
+            if (downloadTextSpan) {
+                downloadTextSpan.textContent = `Download ${audioFilename.split('.').pop().toUpperCase()}`;
+            }
         }
         if (playerModeSpan) playerModeSpan.textContent = resultDetails.submittedVoiceMode || currentVoiceMode || '--';
         if (playerFileSpan) {
@@ -657,130 +565,30 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
             playerFileSpan.innerHTML = fileDetail;
         }
+        if (playerGenTimeSpan) playerGenTimeSpan.textContent = resultDetails.genTime ? `${resultDetails.genTime}s` : '--s';
 
+        const playIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg><span>Play</span>`;
+        const pauseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
         const isDark = document.documentElement.classList.contains('dark');
 
-        // Initialize Regions Plugin
-        wsRegions = WaveSurfer.Regions.create();
-
-        // Initialize Timeline Plugin
-        const wsTimeline = WaveSurfer.Timeline.create({
-            container: timelineDiv,
-            height: 20,
-            timeInterval: 0.5,
-            primaryLabelInterval: 5,
-            secondaryLabelInterval: 1,
-            style: {
-                fontSize: '10px',
-                color: '#64748b' // slate-500
-            }
-        });
-
         wavesurfer = WaveSurfer.create({
-            container: waveformDiv,
-            waveColor: isDark ? '#6366f1' : '#a5b4fc',
-            progressColor: isDark ? '#4f46e5' : '#6366f1',
-            cursorColor: isDark ? '#cbd5e1' : '#475569',
-            barWidth: 2,
-            barRadius: 2,
-            cursorWidth: 1,
-            height: 100, // Slightly taller
-            barGap: 1,
-            responsive: true,
-            url: audioUrl,
-            mediaControls: false,
-            normalize: true,
-            minPxPerSec: 10, // Default zoom level (0 in slider)
-            plugins: [wsRegions, wsTimeline]
+            container: waveformDiv, waveColor: isDark ? '#6366f1' : '#a5b4fc', progressColor: isDark ? '#4f46e5' : '#6366f1',
+            cursorColor: isDark ? '#cbd5e1' : '#475569', barWidth: 3, barRadius: 3, cursorWidth: 1, height: 80, barGap: 2,
+            responsive: true, url: audioUrl, mediaControls: false, normalize: true,
         });
-
-        // Enable drag selection to allow user to create regions
-        wsRegions.enableDragSelection({
-            color: 'rgba(99, 102, 241, 0.3)',
-        });
-
-        // Add Regions events
-        wsRegions.on('region-created', region => {
-            region.setOptions({ color: 'rgba(99, 102, 241, 0.3)' });
-        });
-
-        // Edit Controls logic
-        const deleteRegionBtn = document.getElementById('delete-region-btn');
-        const trimRegionBtn = document.getElementById('trim-region-btn');
-
-        if (deleteRegionBtn) {
-            deleteRegionBtn.onclick = async () => {
-                console.log('Delete button clicked');
-                const regions = wsRegions.getRegions();
-                console.log('Regions found:', regions.length);
-                if (regions.length === 0) {
-                    showNotification('Please select a region to delete.', 'warning');
-                    return;
-                }
-                const region = regions[0]; // Take the first one
-                console.log('Deleting region:', region.start, 'to', region.end);
-                const result = await editAudio('delete', region.start, region.end, resultDetails.filename);
-                if (result && result.filename) {
-                    resultDetails.filename = result.filename;
-                    console.log('Updated resultDetails.filename to:', resultDetails.filename);
-                }
-            };
-        }
-
-        if (trimRegionBtn) {
-            trimRegionBtn.onclick = async () => {
-                const regions = wsRegions.getRegions();
-                if (regions.length === 0) {
-                    showNotification('Please select a region to trim to.', 'warning');
-                    return;
-                }
-                const region = regions[0];
-                const result = await editAudio('trim', region.start, region.end, resultDetails.filename);
-                if (result && result.filename) {
-                    resultDetails.filename = result.filename;
-                    console.log('Updated resultDetails.filename to:', resultDetails.filename);
-                }
-            };
-        }
-
-        // Undo/Redo button handlers
-        const undoBtn = document.getElementById('undo-btn');
-        const redoBtn = document.getElementById('redo-btn');
-
-        if (undoBtn) {
-            undoBtn.onclick = () => performUndo();
-        }
-
-        if (redoBtn) {
-            redoBtn.onclick = () => performRedo();
-        }
-
-        // Zoom Logic
-        if (zoomSlider) {
-            zoomSlider.oninput = function () {
-                const minPxPerSec = Number(this.value);
-                wavesurfer.zoom(minPxPerSec);
-            };
-        }
-
-        const playIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>`;
-        const pauseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" /></svg>`;
 
         wavesurfer.on('ready', () => {
             const duration = wavesurfer.getDuration();
             if (audioDurationSpan) audioDurationSpan.textContent = formatTime(duration);
             if (playBtn) { playBtn.disabled = false; playBtn.innerHTML = playIconSVG; }
             if (downloadLink) { downloadLink.classList.remove('opacity-50', 'pointer-events-none'); downloadLink.setAttribute('aria-disabled', 'false'); }
-
-            // Add initial audio to history
-            addToHistory(audioUrl);
         });
         wavesurfer.on('play', () => { if (playBtn) playBtn.innerHTML = pauseIconSVG; });
         wavesurfer.on('pause', () => { if (playBtn) playBtn.innerHTML = playIconSVG; });
         wavesurfer.on('finish', () => { if (playBtn) playBtn.innerHTML = playIconSVG; wavesurfer.seekTo(0); });
         wavesurfer.on('error', (err) => {
             console.error("WaveSurfer error:", err);
-            showNotification(`Error loading audio waveform: ${err.message || err} `, 'error');
+            showNotification(`Error loading audio waveform: ${err.message || err}`, 'error');
             if (waveformDiv) waveformDiv.innerHTML = `<p class="p-4 text-sm text-red-600 dark:text-red-400">Could not load waveform.</p>`;
             if (playBtn) playBtn.disabled = true;
         });
@@ -1220,231 +1028,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                 predefinedVoiceRefreshButton.innerHTML = originalButtonIcon;
             }
         });
-    }
-
-    // --- Client-Side Audio Editing Logic ---
-    // --- Server-Side Audio Editing Logic (Preserves Perfect Quality) ---
-    // --- Server-Side Audio Editing Logic (Preserves Perfect Quality) ---
-    async function editAudio(action, start, end, filename, isRetry = false) {
-        console.log('editAudio called:', { action, start, end, filename, isRetry });
-
-        if (!wavesurfer) {
-            console.error('wavesurfer not initialized');
-            showNotification('Audio player not ready.', 'error');
-            return;
-        }
-
-        try {
-            const endpoint = action === 'delete' ? '/api/edit/delete' : '/api/edit/trim';
-            const basename = filename ? filename.split('/').pop().split('\\').pop() : '';
-            console.log('Sending filename to server:', basename);
-
-            showNotification('Processing...', 'info');
-
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filename: basename,
-                    start: start,
-                    end: end
-                })
-            });
-
-            if (!response.ok) {
-                let errorMessage = 'Edit failed';
-                try {
-                    const error = await response.json();
-                    errorMessage = error.detail || errorMessage;
-                } catch (e) {
-                    errorMessage = await response.text();
-                }
-
-                // --- FALLBACK LOGIC ---
-                if (!isRetry && (response.status === 404 || errorMessage.includes('not found'))) {
-                    console.warn('File not found on server. Attempting to upload current buffer...');
-                    showNotification('Syncing file to server...', 'info');
-
-                    const decodedData = wavesurfer.getDecodedData();
-                    if (decodedData) {
-                        try {
-                            const uploadResult = await uploadEditedAudio(decodedData, basename);
-                            if (uploadResult && uploadResult.filename) {
-                                console.log('File uploaded. Retrying edit with:', uploadResult.filename);
-                                return await editAudio(action, start, end, uploadResult.filename, true);
-                            }
-                        } catch (uploadError) {
-                            console.error('Upload fallback failed:', uploadError);
-                        }
-                    }
-                }
-                throw new Error(errorMessage);
-            }
-
-            const result = await response.json();
-            console.log('Server edit result:', result);
-
-            const newAudioUrl = `${API_BASE_URL}${result.url}`;
-            await wavesurfer.load(newAudioUrl);
-            addToHistory(newAudioUrl);
-            wsRegions.clearRegions();
-
-            const downloadLink = document.getElementById('download-link');
-            if (downloadLink) {
-                downloadLink.href = result.url;
-                downloadLink.download = result.filename;
-            }
-
-            // Update internal filename reference for future edits
-            if (typeof resultDetails !== 'undefined') {
-                resultDetails.filename = result.filename;
-            }
-
-            showNotification('Audio edited successfully!', 'success');
-            return result;
-
-        } catch (e) {
-            console.error('Error editing audio:', e);
-            if (!isRetry) {
-                showNotification('Error editing audio: ' + e.message, 'error');
-            }
-        }
-    }
-
-    async function uploadEditedAudio(audioBuffer, originalFilename) {
-        try {
-            const wavBlob = audioBufferToWav(audioBuffer, { float32: true }); // Use 32-bit float for quality
-            const formData = new FormData();
-            // Use original filename to help backend generate a related name
-            formData.append('file', wavBlob, originalFilename || 'edited_audio.wav');
-
-            const response = await fetch(`${API_BASE_URL}/api/save_edited_file`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                console.error("Failed to save edited file to server.");
-                showNotification("Warning: Edited file could not be saved to server.", "warning");
-                return;
-            }
-
-            const result = await response.json();
-            // Update the download link with the NEW server URL
-            const downloadLink = document.getElementById('download-link');
-            if (downloadLink) {
-                downloadLink.href = result.url;
-                downloadLink.download = result.filename;
-            }
-            console.log("Edited file saved permanently:", result.filename);
-            return result;
-
-        } catch (e) {
-            console.error("Error uploading edited audio:", e);
-            throw e;
-        }
-    }
-
-    // Simple WAV Encoder (Client-Side)
-    function audioBufferToWav(buffer, opt) {
-        opt = opt || {};
-        var numChannels = buffer.numberOfChannels;
-        var sampleRate = buffer.sampleRate;
-        var format = opt.float32 ? 3 : 1;
-        var bitDepth = format === 3 ? 32 : 16;
-
-        console.log('WAV Encoding:', {
-            numChannels,
-            sampleRate,
-            format: format === 3 ? '32-bit float' : '16-bit PCM',
-            bitDepth
-        });
-
-        var result;
-        if (numChannels === 2) {
-            result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
-        } else {
-            result = buffer.getChannelData(0);
-        }
-
-        return encodeWAV(result, numChannels, sampleRate, format, bitDepth);
-    }
-
-    function interleave(inputL, inputR) {
-        var length = inputL.length + inputR.length;
-        var result = new Float32Array(length);
-
-        var index = 0;
-        var inputIndex = 0;
-
-        while (index < length) {
-            result[index++] = inputL[inputIndex];
-            result[index++] = inputR[inputIndex];
-            inputIndex++;
-        }
-        return result;
-    }
-
-    function encodeWAV(samples, numChannels, sampleRate, format, bitDepth) {
-        var bytesPerSample = bitDepth / 8;
-        var blockAlign = numChannels * bytesPerSample;
-
-        var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
-        var view = new DataView(buffer);
-
-        /* RIFF identifier */
-        writeString(view, 0, 'RIFF');
-        /* RIFF chunk length */
-        view.setUint32(4, 36 + samples.length * bytesPerSample, true);
-        /* RIFF type */
-        writeString(view, 8, 'WAVE');
-        /* format chunk identifier */
-        writeString(view, 12, 'fmt ');
-        /* format chunk length */
-        view.setUint32(16, 16, true);
-        /* sample format (raw) */
-        view.setUint16(20, format, true);
-        /* channel count */
-        view.setUint16(22, numChannels, true);
-        /* sample rate */
-        view.setUint32(24, sampleRate, true);
-        /* byte rate (sample rate * block align) */
-        view.setUint32(28, sampleRate * blockAlign, true);
-        /* block align (channel count * bytes per sample) */
-        view.setUint16(32, blockAlign, true);
-        /* bits per sample */
-        view.setUint16(34, bitDepth, true);
-        /* data chunk identifier */
-        writeString(view, 36, 'data');
-        /* data chunk length */
-        view.setUint32(40, samples.length * bytesPerSample, true);
-
-        if (format === 1) { // PCM
-            floatTo16BitPCM(view, 44, samples);
-        } else {
-            writeFloat32(view, 44, samples);
-        }
-
-        return new Blob([view], { type: 'audio/wav' });
-    }
-
-    function floatTo16BitPCM(output, offset, input) {
-        for (var i = 0; i < input.length; i++, offset += 2) {
-            var s = Math.max(-1, Math.min(1, input[i]));
-            output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-        }
-    }
-
-    function writeFloat32(output, offset, input) {
-        for (var i = 0; i < input.length; i++, offset += 4) {
-            output.setFloat32(offset, input[i], true);
-        }
-    }
-
-    function writeString(view, offset, string) {
-        for (var i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
     }
 
     await fetchInitialData();

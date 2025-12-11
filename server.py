@@ -18,7 +18,6 @@ from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any, Literal
 import webbrowser  # For automatic browser opening
 import threading  # For automatic browser opening
-from pydub import AudioSegment # For audio editing
 
 from fastapi import (
     FastAPI,
@@ -78,12 +77,6 @@ class OpenAISpeechRequest(BaseModel):
     response_format: Literal["wav", "opus", "mp3"] = "wav"  # Add "mp3"
     speed: float = 1.0
     seed: Optional[int] = None
-
-
-class AudioEditRequest(BaseModel):
-    filename: str
-    start: float
-    end: float
 
 
 # --- Logging Configuration ---
@@ -604,129 +597,7 @@ async def upload_predefined_voice_endpoint(files: List[UploadFile] = File(...)):
     return JSONResponse(content=response_data, status_code=status_code)
 
 
-    if upload_errors:
-        logger.warning(
-            f"Upload to /upload_predefined_voice completed with {len(upload_errors)} error(s)."
-        )
-    return JSONResponse(content=response_data, status_code=status_code)
-
-
-# --- Audio Editing Endpoints ---
-
-async def process_audio_edit(request: AudioEditRequest, mode: str):
-    logger.info(f"Processing audio edit: mode={mode}, file={request.filename}, range={request.start}-{request.end}")
-    
-    # Locate file in output directory
-    output_dir = get_output_path(ensure_absolute=True)
-    file_path = output_dir / request.filename
-    
-    # Handle case where filename might be a full URL path or just basename
-    if not file_path.exists():
-         filename_only = Path(request.filename).name
-         file_path = output_dir / filename_only
-    
-    if not file_path.exists():
-        logger.error(f"Audio file to edit not found: {file_path}")
-        raise HTTPException(status_code=404, detail="Audio file not found")
-        
-    try:
-        # Load audio
-        # Pydub handles format detection usually, but hint with extension if needed
-        audio = AudioSegment.from_file(str(file_path))
-        
-        # Convert seconds to ms
-        start_ms = int(request.start * 1000)
-        end_ms = int(request.end * 1000)
-        
-        # Ensure bounds and validity
-        start_ms = max(0, start_ms)
-        end_ms = min(len(audio), end_ms)
-        
-        if start_ms >= end_ms:
-             raise HTTPException(status_code=400, detail=f"Invalid time range: {start_ms}ms to {end_ms}ms")
-
-        if mode == "delete":
-            # Keep before start and after end (effectively removing the middle)
-            # This 'joins' the parts before and after.
-            part1 = audio[:start_ms]
-            part2 = audio[end_ms:]
-            new_audio = part1 + part2
-        elif mode == "trim":
-            # Keep only the range (crop)
-             new_audio = audio[start_ms:end_ms]
-        else:
-             raise ValueError("Invalid edit mode")
-
-        # Create new filename
-        original_stem = file_path.stem
-        # Remove previous 'edited_' prefix to avoid accumulation if multiple edits
-        if original_stem.startswith("edited_"):
-             original_stem = original_stem.replace("edited_", "", 1)
-             
-        # Use original extension
-        ext = file_path.suffix
-        new_filename = f"edited_{original_stem}_{uuid.uuid4().hex[:4]}{ext}"
-        new_file_path = output_dir / new_filename
-        
-        # Export
-        fmt = ext.lstrip('.').lower()
-        if fmt not in ['wav', 'mp3', 'ogg', 'opus']:
-            fmt = 'wav' # Default fallback
-            
-        new_audio.export(str(new_file_path), format=fmt)
-        logger.info(f"Edited audio saved to: {new_file_path}")
-            
-        return {
-            "filename": new_filename,
-            "url": f"/outputs/{new_filename}" 
-        }
-
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error editing audio: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Audio processing failed: {str(e)}")
-
-
-@app.post("/api/edit/delete", tags=["Audio Editing"])
-async def delete_audio_segment_api(request: AudioEditRequest):
-    """Deletes a selected segment from the audio, joining the remaining parts."""
-    return await process_audio_edit(request, "delete")
-
-
-@app.post("/api/edit/trim", tags=["Audio Editing"])
-async def trim_audio_segment_api(request: AudioEditRequest):
-    """Trims the audio to keep ONLY the selected segment."""
-    return await process_audio_edit(request, "trim")
-
-
-@app.post("/api/save_edited_file", tags=["Audio Editing"])
-async def save_edited_file_api(file: UploadFile = File(...)):
-    """Saves a client-side edited file to the outputs directory."""
-    logger.info(f"Saving client-edited file: {file.filename}")
-    output_dir = get_output_path(ensure_absolute=True)
-    
-    # Generate a safe, unique filename
-    original_name = Path(file.filename).stem
-    if original_name.startswith("edited_"):
-        original_name = original_name.replace("edited_", "", 1)
-    
-    new_filename = f"edited_{original_name}_{uuid.uuid4().hex[:4]}.wav" 
-    destination_path = output_dir / new_filename
-    
-    try:
-        with open(destination_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        logger.info(f"Saved edited file to: {destination_path}")
-        return {
-            "filename": new_filename,
-            "url": f"/outputs/{new_filename}"
-        }
-    except Exception as e:
-        logger.error(f"Error saving edited file: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save edited file: {str(e)}")
-
+# --- TTS Generation Endpoint ---
 
 
 @app.post(
@@ -1016,17 +887,6 @@ async def custom_tts_endpoint(
         f"{suggested_filename_base}.{output_format_str}"
     )
     headers = {"Content-Disposition": f'attachment; filename="{download_filename}"'}
-
-    # --- MODIFICATION: Save to outputs directory for server-side editing ---
-    try:
-        output_dir = get_output_path(ensure_absolute=True)
-        saved_file_path = output_dir / download_filename
-        with open(saved_file_path, "wb") as f:
-            f.write(encoded_audio_bytes)
-        logger.info(f"Saved generated audio to: {saved_file_path}")
-    except Exception as e:
-        logger.error(f"Failed to save generated audio to outputs: {e}")
-    # -----------------------------------------------------------------------
 
     logger.info(
         f"Successfully generated audio: {download_filename}, {len(encoded_audio_bytes)} bytes, type {media_type}."
