@@ -1269,7 +1269,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         try {
             // Update player immediately for "instant" feel
             console.log('Converting buffer to WAV blob');
-            const wavBlob = audioBufferToWav(newBuffer);
+            const wavBlob = audioBufferToWav(newBuffer, { float32: true }); // Use 32-bit float for quality
             const blobUrl = URL.createObjectURL(wavBlob);
 
             console.log('Loading new audio into wavesurfer');
@@ -1290,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     async function uploadEditedAudio(audioBuffer, originalFilename) {
         try {
-            const wavBlob = audioBufferToWav(audioBuffer);
+            const wavBlob = audioBufferToWav(audioBuffer, { float32: true }); // Use 32-bit float for quality
             const formData = new FormData();
             // Use original filename to help backend generate a related name
             formData.append('file', wavBlob, originalFilename || 'edited_audio.wav');
