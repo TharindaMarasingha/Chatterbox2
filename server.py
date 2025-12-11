@@ -700,6 +700,34 @@ async def trim_audio_segment_api(request: AudioEditRequest):
     return await process_audio_edit(request, "trim")
 
 
+@app.post("/api/save_edited_file", tags=["Audio Editing"])
+async def save_edited_file_api(file: UploadFile = File(...)):
+    """Saves a client-side edited file to the outputs directory."""
+    logger.info(f"Saving client-edited file: {file.filename}")
+    output_dir = get_output_path(ensure_absolute=True)
+    
+    # Generate a safe, unique filename
+    original_name = Path(file.filename).stem
+    if original_name.startswith("edited_"):
+        original_name = original_name.replace("edited_", "", 1)
+    
+    new_filename = f"edited_{original_name}_{uuid.uuid4().hex[:4]}.wav" 
+    destination_path = output_dir / new_filename
+    
+    try:
+        with open(destination_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        logger.info(f"Saved edited file to: {destination_path}")
+        return {
+            "filename": new_filename,
+            "url": f"/outputs/{new_filename}"
+        }
+    except Exception as e:
+        logger.error(f"Error saving edited file: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save edited file: {str(e)}")
+
+
 
 @app.post(
     "/tts",
