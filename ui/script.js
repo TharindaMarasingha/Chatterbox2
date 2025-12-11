@@ -1196,7 +1196,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                 return;
             }
 
-            const ctx = new AudioContext(); // Use a temp context to create buffer
+            // Use OfflineAudioContext to create buffer (prevents context limit errors)
+            const ctx = new OfflineAudioContext(numberOfChannels, newLength, sampleRate);
             newBuffer = ctx.createBuffer(numberOfChannels, newLength, sampleRate);
 
             for (let i = 0; i < numberOfChannels; i++) {
@@ -1217,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 return;
             }
 
-            const ctx = new AudioContext();
+            const ctx = new OfflineAudioContext(numberOfChannels, newLength, sampleRate);
             newBuffer = ctx.createBuffer(numberOfChannels, newLength, sampleRate);
 
             for (let i = 0; i < numberOfChannels; i++) {
