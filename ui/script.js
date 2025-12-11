@@ -1271,13 +1271,17 @@ document.addEventListener('DOMContentLoaded', async function () {
             // Call server-side editing endpoint (uses Pydub for perfect quality)
             const endpoint = action === 'delete' ? '/api/edit/delete' : '/api/edit/trim';
 
+            // Extract just the filename (remove any path)
+            const basename = filename ? filename.split('/').pop().split('\\').pop() : '';
+            console.log('Sending filename to server:', basename);
+
             showNotification('Processing...', 'info');
 
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    filename: filename,
+                    filename: basename,
                     start: start,
                     end: end
                 })
