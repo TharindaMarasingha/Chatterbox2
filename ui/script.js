@@ -1258,8 +1258,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     // --- Client-Side Audio Editing Logic ---
     // --- Server-Side Audio Editing Logic (Preserves Perfect Quality) ---
-    async function editAudio(action, start, end, filename) {
-        console.log('editAudio called:', { action, start, end, filename });
+    // --- Server-Side Audio Editing Logic (Preserves Perfect Quality) ---
+    async function editAudio(action, start, end, filename, isRetry = false) {
+        console.log('editAudio called:', { action, start, end, filename, isRetry });
 
         if (!wavesurfer) {
             console.error('wavesurfer not initialized');
@@ -1268,10 +1269,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
 
         try {
-            // Call server-side editing endpoint (uses Pydub for perfect quality)
             const endpoint = action === 'delete' ? '/api/edit/delete' : '/api/edit/trim';
-
-            // Extract just the filename (remove any path)
             const basename = filename ? filename.split('/').pop().split('\\').pop() : '';
             console.log('Sending filename to server:', basename);
 
@@ -1288,35 +1286,62 @@ document.addEventListener('DOMContentLoaded', async function () {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Edit failed');
+                let errorMessage = 'Edit failed';
+                try {
+                    const error = await response.json();
+                    errorMessage = error.detail || errorMessage;
+                } catch (e) {
+                    errorMessage = await response.text();
+                }
+
+                // --- FALLBACK LOGIC ---
+                if (!isRetry && (response.status === 404 || errorMessage.includes('not found'))) {
+                    console.warn('File not found on server. Attempting to upload current buffer...');
+                    showNotification('Syncing file to server...', 'info');
+
+                    const decodedData = wavesurfer.getDecodedData();
+                    if (decodedData) {
+                        try {
+                            const uploadResult = await uploadEditedAudio(decodedData, basename);
+                            if (uploadResult && uploadResult.filename) {
+                                console.log('File uploaded. Retrying edit with:', uploadResult.filename);
+                                await editAudio(action, start, end, uploadResult.filename, true);
+                                return;
+                            }
+                        } catch (uploadError) {
+                            console.error('Upload fallback failed:', uploadError);
+                        }
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();
             console.log('Server edit result:', result);
 
-            // Load the edited file
             const newAudioUrl = `${API_BASE_URL}${result.url}`;
             await wavesurfer.load(newAudioUrl);
-
-            // Add to history
             addToHistory(newAudioUrl);
-
-            // Remove all regions
             wsRegions.clearRegions();
 
-            // Update download link
             const downloadLink = document.getElementById('download-link');
             if (downloadLink) {
                 downloadLink.href = result.url;
                 downloadLink.download = result.filename;
             }
 
+            // Update internal filename reference for future edits
+            if (typeof resultDetails !== 'undefined') {
+                resultDetails.filename = result.filename;
+            }
+
             showNotification('Audio edited successfully!', 'success');
 
         } catch (e) {
             console.error('Error editing audio:', e);
-            showNotification('Error editing audio: ' + e.message, 'error');
+            if (!isRetry) {
+                showNotification('Error editing audio: ' + e.message, 'error');
+            }
         }
     }
 
@@ -1346,9 +1371,11 @@ document.addEventListener('DOMContentLoaded', async function () {
                 downloadLink.download = result.filename;
             }
             console.log("Edited file saved permanently:", result.filename);
+            return result;
 
         } catch (e) {
             console.error("Error uploading edited audio:", e);
+            throw e;
         }
     }
 

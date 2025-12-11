@@ -1017,6 +1017,17 @@ async def custom_tts_endpoint(
     )
     headers = {"Content-Disposition": f'attachment; filename="{download_filename}"'}
 
+    # --- MODIFICATION: Save to outputs directory for server-side editing ---
+    try:
+        output_dir = get_output_path(ensure_absolute=True)
+        saved_file_path = output_dir / download_filename
+        with open(saved_file_path, "wb") as f:
+            f.write(encoded_audio_bytes)
+        logger.info(f"Saved generated audio to: {saved_file_path}")
+    except Exception as e:
+        logger.error(f"Failed to save generated audio to outputs: {e}")
+    # -----------------------------------------------------------------------
+
     logger.info(
         f"Successfully generated audio: {download_filename}, {len(encoded_audio_bytes)} bytes, type {media_type}."
     )
