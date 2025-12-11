@@ -540,8 +540,73 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
     if (splitTextToggle) toggleChunkControlsVisibility();
 
+    // --- Audio History for Undo/Redo ---
+    let audioHistory = []; // Stack of audio blob URLs
+    let historyIndex = -1; // Current position in history
+    const MAX_HISTORY = 20; // Limit history to prevent memory issues
+
+    function updateHistoryButtons() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if (undoBtn) undoBtn.disabled = historyIndex <= 0;
+        if (redoBtn) redoBtn.disabled = historyIndex >= audioHistory.length - 1;
+    }
+
+    function addToHistory(blobUrl) {
+        // Remove any future history if we're not at the end
+        if (historyIndex < audioHistory.length - 1) {
+            // Revoke URLs that will be removed
+            for (let i = historyIndex + 1; i < audioHistory.length; i++) {
+                URL.revokeObjectURL(audioHistory[i]);
+            }
+            audioHistory = audioHistory.slice(0, historyIndex + 1);
+        }
+
+        audioHistory.push(blobUrl);
+        historyIndex++;
+
+        // Limit history size
+        if (audioHistory.length > MAX_HISTORY) {
+            const removed = audioHistory.shift();
+            URL.revokeObjectURL(removed);
+            historyIndex--;
+        }
+
+        updateHistoryButtons();
+        console.log('History added. Index:', historyIndex, 'Length:', audioHistory.length);
+    }
+
+    async function performUndo() {
+        if (historyIndex > 0) {
+            historyIndex--;
+            const blobUrl = audioHistory[historyIndex];
+            console.log('Undo to index:', historyIndex);
+            await wavesurfer.load(blobUrl);
+            wsRegions.clearRegions();
+            updateHistoryButtons();
+            showNotification('Undo successful', 'info');
+        }
+    }
+
+    async function performRedo() {
+        if (historyIndex < audioHistory.length - 1) {
+            historyIndex++;
+            const blobUrl = audioHistory[historyIndex];
+            console.log('Redo to index:', historyIndex);
+            await wavesurfer.load(blobUrl);
+            wsRegions.clearRegions();
+            updateHistoryButtons();
+            showNotification('Redo successful', 'info');
+        }
+    }
+
     // --- Audio Player (WaveSurfer) ---
     function initializeWaveSurfer(audioUrl, resultDetails = {}) {
+        // Reset history when loading new audio
+        audioHistory.forEach(url => URL.revokeObjectURL(url));
+        audioHistory = [];
+        historyIndex = -1;
+
         if (wavesurfer) {
             wavesurfer.unAll(); // Remove all event listeners before destroying
             wavesurfer.destroy();
@@ -580,6 +645,13 @@ document.addEventListener('DOMContentLoaded', async function () {
                                 </button>
                                 <button id="trim-region-btn" class="toolbar-btn" title="Crop to Selected Region">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M20.599 1.5c-.376 0-.743.111-1.055.32l-5.08 3.385a18.747 18.747 0 0 0-3.471 2.987 10.04 10.04 0 0 1 4.815 4.815 8.787 8.787 0 0 1 2.987-3.472l3.386-5.079A1.902 1.902 0 0 0 20.599 1.5Zm-8.3 14.025a18.76 18.76 0 0 0 1.896-1.207 8.026 8.026 0 0 0-4.513-4.513c-.375.643-.78 1.28-1.208 1.896.572.572 1.14 1.14 1.71 1.71l2.115 2.114Zm-4.135 4.136a6.727 6.727 0 0 0-1.952 1.306l-2.25 2.25a.75.75 0 0 1-1.06-1.06l2.25-2.25a6.727 6.727 0 0 0 1.306-1.952 15.908 15.908 0 0 1 1.706-1.706l-2.114-2.115c-.533-.534-1.101-1.068-1.71-1.637a20.088 20.088 0 0 1-3.14 3.799 10.032 10.032 0 0 0 4.225 3.372c.67.245 1.758.623 2.74 1.99ZM12.247 10.966c-.534.533-1.068 1.1-1.636 1.71a15.908 15.908 0 0 0 1.706 1.706c.609-.569 1.177-1.137 1.71-1.636l-1.78-1.78Z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <div class="toolbar-divider"></div>
+                                <button id="undo-btn" class="toolbar-btn" title="Undo" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.53 2.47a.75.75 0 0 1 0 1.06L4.81 8.25H15a6.75 6.75 0 0 1 0 13.5h-3a.75.75 0 0 1 0-1.5h3a5.25 5.25 0 1 0 0-10.5H4.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button id="redo-btn" class="toolbar-btn" title="Redo" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M14.47 2.47a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1 0 1.06l-6 6a.75.75 0 1 1-1.06-1.06l4.72-4.72H9a5.25 5.25 0 1 0 0 10.5h3a.75.75 0 0 1 0 1.5H9a6.75 6.75 0 0 1 0-13.5h10.19l-4.72-4.72a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                                 </button>
                             </div>
 
@@ -705,6 +777,18 @@ document.addEventListener('DOMContentLoaded', async function () {
             };
         }
 
+        // Undo/Redo button handlers
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+
+        if (undoBtn) {
+            undoBtn.onclick = () => performUndo();
+        }
+
+        if (redoBtn) {
+            redoBtn.onclick = () => performRedo();
+        }
+
         // Zoom Logic
         if (zoomSlider) {
             zoomSlider.oninput = function () {
@@ -721,6 +805,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             if (audioDurationSpan) audioDurationSpan.textContent = formatTime(duration);
             if (playBtn) { playBtn.disabled = false; playBtn.innerHTML = playIconSVG; }
             if (downloadLink) { downloadLink.classList.remove('opacity-50', 'pointer-events-none'); downloadLink.setAttribute('aria-disabled', 'false'); }
+
+            // Add initial audio to history
+            addToHistory(audioUrl);
         });
         wavesurfer.on('play', () => { if (playBtn) playBtn.innerHTML = pauseIconSVG; });
         wavesurfer.on('pause', () => { if (playBtn) playBtn.innerHTML = playIconSVG; });
@@ -1274,6 +1361,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             console.log('Loading new audio into wavesurfer');
             await wavesurfer.load(blobUrl);
+
+            // Add edited audio to history
+            addToHistory(blobUrl);
 
             // Remove all regions after the new audio loads
             wsRegions.clearRegions();
