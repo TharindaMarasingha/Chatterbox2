@@ -556,64 +556,66 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         // Ensure the container is clean or re-created
         audioPlayerContainer.innerHTML = `
-            <div class="audio-player-card">
+            <div class="card-base">
                 <div class="p-6 sm:p-8">
-                    <h2 class="card-header">Generated Audio</h2>
-                    <div class="mb-5"><div id="waveform" class="waveform-container"></div></div>
-                    <div class="audio-player-controls">
-                        <div class="audio-player-buttons">
-                            <button id="play-btn" class="btn-primary flex items-center" disabled>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg>
-                                <span>Play</span>
-                            </button>
-                            <a id="download-link" href="#" download="tts_output.wav" class="btn-secondary flex items-center opacity-50 pointer-events-none">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5">
-                                  <path fill-rule="evenodd" d="M10 3a.75.75 0 01.75.75v6.638l1.96-2.158a.75.75 0 111.08 1.04l-3.25 3.5a.75.75 0 01-1.08 0l-3.25-3.5a.75.75 0 111.08-1.04l1.96 2.158V3.75A.75.75 0 0110 3zM3.75 13a.75.75 0 01.75.75v.008c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V13.75a.75.75 0 011.5 0v.008c0 1.518-1.232 2.75-2.75 2.75h-8.5C4.232 16.5 3 15.268 3 13.75v-.008A.75.75 0 013.75 13z" clip-rule="evenodd" />
-                                </svg>
-                                <span>Download</span>
-                            </a>
-                        </div>
-                        <div class="audio-player-info text-xs sm:text-sm">
-                            Mode: <span id="player-voice-mode" class="font-medium text-indigo-600 dark:text-indigo-400">--</span>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="card-header mb-0">Audio Editor</h2>
+                        <div class="audio-player-info text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                            <span id="player-voice-mode" class="font-medium text-indigo-600 dark:text-indigo-400">--</span>
                             <span id="player-voice-file-details"></span>
-                            <span class="mx-1">•</span> Gen Time: <span id="player-gen-time" class="font-medium tabular-nums">--s</span>
-                            <span class="mx-1">•</span> Duration: <span id="audio-duration" class="font-medium tabular-nums">--:--</span>
+                            <span class="mx-1">•</span> <span id="audio-duration" class="font-medium tabular-nums">--:--</span>
                         </div>
                     </div>
-                    </div>
-                    
-                    <div class="mt-5 border-t border-slate-200 dark:border-slate-700 pt-4">
-                        <h3 class="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">Edit Audio</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Drag on the waveform to select a region.</p>
-                        <div class="flex flex-wrap gap-2">
-                            <button id="delete-region-btn" class="btn-secondary text-xs py-1.5 px-3">
-                                Delete Selected Part
-                            </button>
-                            <button id="trim-region-btn" class="btn-secondary text-xs py-1.5 px-3">
-                                Trim to Selected Part (Crop)
-                            </button>
+
+                    <div class="audio-editor-wrapper">
+                        <!-- Toolbar -->
+                        <div class="audio-toolbar">
+                            <div class="toolbar-group">
+                                <button id="play-btn" class="toolbar-btn" title="Play/Pause" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <div class="toolbar-divider"></div>
+                                <button id="delete-region-btn" class="toolbar-btn" title="Delete Selected Region">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-3.536 6.19a.75.75 0 0 1 1.05-.143L12 11.58l4.122-2.507a.75.75 0 0 1 .786 1.29l-4.5 2.74a.75.75 0 0 1-.786 0l-4.5-2.74a.75.75 0 0 1-.143-1.05Z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button id="trim-region-btn" class="toolbar-btn" title="Crop to Selected Region">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M20.599 1.5c-.376 0-.743.111-1.055.32l-5.08 3.385a18.747 18.747 0 0 0-3.471 2.987 10.04 10.04 0 0 1 4.815 4.815 8.787 8.787 0 0 1 2.987-3.472l3.386-5.079A1.902 1.902 0 0 0 20.599 1.5Zm-8.3 14.025a18.76 18.76 0 0 0 1.896-1.207 8.026 8.026 0 0 0-4.513-4.513c-.375.643-.78 1.28-1.208 1.896.572.572 1.14 1.14 1.71 1.71l2.115 2.114Zm-4.135 4.136a6.727 6.727 0 0 0-1.952 1.306l-2.25 2.25a.75.75 0 0 1-1.06-1.06l2.25-2.25a6.727 6.727 0 0 0 1.306-1.952 15.908 15.908 0 0 1 1.706-1.706l-2.114-2.115c-.533-.534-1.101-1.068-1.71-1.637a20.088 20.088 0 0 1-3.14 3.799 10.032 10.032 0 0 0 4.225 3.372c.67.245 1.758.623 2.74 1.99ZM12.247 10.966c-.534.533-1.068 1.1-1.636 1.71a15.908 15.908 0 0 0 1.706 1.706c.609-.569 1.177-1.137 1.71-1.636l-1.78-1.78Z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </div>
+
+                            <div class="toolbar-group">
+                                <div class="zoom-container">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-slate-500"><path fill-rule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401Z" clip-rule="evenodd" /></svg>
+                                    <input type="range" id="zoom-slider" class="zoom-slider" min="10" max="200" value="0" title="Zoom">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-slate-500"><path d="M10 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5A.75.75 0 0 1 10 2Z" /><path d="M10 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" /></svg>
+                                </div>
+                                <div class="toolbar-divider"></div>
+                                <a id="download-link" href="#" download="tts_output.wav" class="toolbar-btn opacity-50 pointer-events-none" title="Download">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v9.54l3.12-3.12a.75.75 0 1 1 1.06 1.06l-4.4 4.4a.75.75 0 0 1-1.06 0l-4.4-4.4a.75.75 0 0 1 1.06-1.06l3.12 3.12V3a.75.75 0 0 1 .75-.75Zm-7.75 14.5a.75.75 0 0 1 .75-.75h14a.75.75 0 1 1 0 1.5h-14a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd" /></svg>
+                                </a>
+                            </div>
                         </div>
+
+                        <div id="timeline" class="border-b border-slate-700"></div>
+                        <div id="waveform" class="waveform-container"></div>
                     </div>
                 </div>
-            </div>`;
+            </div > `;
 
         // Re-select elements after recreating them
         const waveformDiv = audioPlayerContainer.querySelector('#waveform');
+        const timelineDiv = audioPlayerContainer.querySelector('#timeline');
         const playBtn = audioPlayerContainer.querySelector('#play-btn');
         const downloadLink = audioPlayerContainer.querySelector('#download-link');
         const playerModeSpan = audioPlayerContainer.querySelector('#player-voice-mode');
         const playerFileSpan = audioPlayerContainer.querySelector('#player-voice-file-details');
-        const playerGenTimeSpan = audioPlayerContainer.querySelector('#player-gen-time');
         const audioDurationSpan = audioPlayerContainer.querySelector('#audio-duration');
+        const zoomSlider = audioPlayerContainer.querySelector('#zoom-slider');
 
         const audioFilename = resultDetails.filename || (typeof audioUrl === 'string' ? audioUrl.split('/').pop() : 'tts_output.wav');
         if (downloadLink) {
             downloadLink.href = audioUrl;
             downloadLink.download = audioFilename;
-            const downloadTextSpan = downloadLink.querySelector('span'); // Target the span for text update
-            if (downloadTextSpan) {
-                downloadTextSpan.textContent = `Download ${audioFilename.split('.').pop().toUpperCase()}`;
-            }
         }
         if (playerModeSpan) playerModeSpan.textContent = resultDetails.submittedVoiceMode || currentVoiceMode || '--';
         if (playerFileSpan) {
@@ -625,26 +627,45 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
             playerFileSpan.innerHTML = fileDetail;
         }
-        if (playerGenTimeSpan) playerGenTimeSpan.textContent = resultDetails.genTime ? `${resultDetails.genTime}s` : '--s';
 
-        const playIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm6.39-2.908a.75.75 0 0 1 .766.027l3.5 2.25a.75.75 0 0 1 0 1.262l-3.5 2.25A.75.75 0 0 1 8 12.25v-4.5a.75.75 0 0 1 .39-.658Z" clip-rule="evenodd" /></svg><span>Play</span>`;
-        const pauseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
         const isDark = document.documentElement.classList.contains('dark');
 
         // Initialize Regions Plugin
         wsRegions = WaveSurfer.Regions.create();
 
+        // Initialize Timeline Plugin
+        const wsTimeline = WaveSurfer.Timeline.create({
+            container: timelineDiv,
+            height: 20,
+            timeInterval: 0.5,
+            primaryLabelInterval: 5,
+            secondaryLabelInterval: 1,
+            style: {
+                fontSize: '10px',
+                color: '#64748b' // slate-500
+            }
+        });
+
         wavesurfer = WaveSurfer.create({
-            container: waveformDiv, waveColor: isDark ? '#6366f1' : '#a5b4fc', progressColor: isDark ? '#4f46e5' : '#6366f1',
-            cursorColor: isDark ? '#cbd5e1' : '#475569', barWidth: 3, barRadius: 3, cursorWidth: 1, height: 80, barGap: 2,
-            responsive: true, url: audioUrl, mediaControls: false, normalize: true,
-            plugins: [wsRegions]
+            container: waveformDiv,
+            waveColor: isDark ? '#6366f1' : '#a5b4fc',
+            progressColor: isDark ? '#4f46e5' : '#6366f1',
+            cursorColor: isDark ? '#cbd5e1' : '#475569',
+            barWidth: 2,
+            barRadius: 2,
+            cursorWidth: 1,
+            height: 100, // Slightly taller
+            barGap: 1,
+            responsive: true,
+            url: audioUrl,
+            mediaControls: false,
+            normalize: true,
+            minPxPerSec: 10, // Default zoom level (0 in slider)
+            plugins: [wsRegions, wsTimeline]
         });
 
         // Add Regions events
         wsRegions.on('region-created', region => {
-            // Ensure only one region exists for simple editing (optional, but good for UX)
-            // wsRegions.getRegions().forEach(r => { if (r !== region) r.remove(); });
             region.setOptions({ color: 'rgba(99, 102, 241, 0.3)' });
         });
 
@@ -676,6 +697,17 @@ document.addEventListener('DOMContentLoaded', async function () {
             };
         }
 
+        // Zoom Logic
+        if (zoomSlider) {
+            zoomSlider.oninput = function () {
+                const minPxPerSec = Number(this.value);
+                wavesurfer.zoom(minPxPerSec);
+            };
+        }
+
+        const playIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>`;
+        const pauseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" /></svg>`;
+
         wavesurfer.on('ready', () => {
             const duration = wavesurfer.getDuration();
             if (audioDurationSpan) audioDurationSpan.textContent = formatTime(duration);
@@ -687,7 +719,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         wavesurfer.on('finish', () => { if (playBtn) playBtn.innerHTML = playIconSVG; wavesurfer.seekTo(0); });
         wavesurfer.on('error', (err) => {
             console.error("WaveSurfer error:", err);
-            showNotification(`Error loading audio waveform: ${err.message || err}`, 'error');
+            showNotification(`Error loading audio waveform: ${err.message || err} `, 'error');
             if (waveformDiv) waveformDiv.innerHTML = `<p class="p-4 text-sm text-red-600 dark:text-red-400">Could not load waveform.</p>`;
             if (playBtn) playBtn.disabled = true;
         });
