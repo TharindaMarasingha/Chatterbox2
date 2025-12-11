@@ -79,49 +79,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const audioPlayerContainer = document.getElementById('audio-player-container');
 
-    // Edit Audio Function
-    async function editAudio(action, start, end, filename) {
-        if (!filename) {
-            showNotification('No filename associated with this audio.', 'error');
-            return;
-        }
-        showLoadingOverlay();
-        loadingMessage.textContent = 'Processing audio...';
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/edit/${action}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename, start, end })
-            });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Editing failed');
-            }
-
-            const data = await response.json();
-            // Reload the player with the new file
-            // We need to construct the URL. Data should contain the new filename or URL.
-            // Assuming the server returns { 'url': ..., 'filename': ... }
-            if (data.url) {
-                // Determine voice mode details from previous state or response
-                const resultDetails = {
-                    outputUrl: data.url,
-                    filename: data.filename,
-                    genTime: '0.00',
-                    submittedVoiceMode: currentVoiceMode
-                };
-                initializeWaveSurfer(data.url, resultDetails);
-                showNotification(`Audio ${action === 'delete' ? 'segment deleted' : 'trimmed'} successfully.`, 'success');
-            }
-
-        } catch (error) {
-            console.error('Audio Edit Error:', error);
-            showNotification(`Edit failed: ${error.message}`, 'error');
-        } finally {
-            hideLoadingOverlay();
-        }
-    }
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingMessage = document.getElementById('loading-message');
     const loadingStatusText = document.getElementById('loading-status');
@@ -761,7 +719,11 @@ document.addEventListener('DOMContentLoaded', async function () {
                 }
                 const region = regions[0]; // Take the first one
                 console.log('Deleting region:', region.start, 'to', region.end);
-                await editAudio('delete', region.start, region.end, resultDetails.filename);
+                const result = await editAudio('delete', region.start, region.end, resultDetails.filename);
+                if (result && result.filename) {
+                    resultDetails.filename = result.filename;
+                    console.log('Updated resultDetails.filename to:', resultDetails.filename);
+                }
             };
         }
 
@@ -773,7 +735,11 @@ document.addEventListener('DOMContentLoaded', async function () {
                     return;
                 }
                 const region = regions[0];
-                await editAudio('trim', region.start, region.end, resultDetails.filename);
+                const result = await editAudio('trim', region.start, region.end, resultDetails.filename);
+                if (result && result.filename) {
+                    resultDetails.filename = result.filename;
+                    console.log('Updated resultDetails.filename to:', resultDetails.filename);
+                }
             };
         }
 
@@ -1305,8 +1271,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                             const uploadResult = await uploadEditedAudio(decodedData, basename);
                             if (uploadResult && uploadResult.filename) {
                                 console.log('File uploaded. Retrying edit with:', uploadResult.filename);
-                                await editAudio(action, start, end, uploadResult.filename, true);
-                                return;
+                                return await editAudio(action, start, end, uploadResult.filename, true);
                             }
                         } catch (uploadError) {
                             console.error('Upload fallback failed:', uploadError);
@@ -1336,6 +1301,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
 
             showNotification('Audio edited successfully!', 'success');
+            return result;
 
         } catch (e) {
             console.error('Error editing audio:', e);
