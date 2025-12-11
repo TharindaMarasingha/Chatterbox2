@@ -1257,6 +1257,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     // --- Client-Side Audio Editing Logic ---
+    // --- Server-Side Audio Editing Logic (Preserves Perfect Quality) ---
     async function editAudio(action, start, end, filename) {
         console.log('editAudio called:', { action, start, end, filename });
 
@@ -1266,122 +1267,52 @@ document.addEventListener('DOMContentLoaded', async function () {
             return;
         }
 
-        const decodedData = wavesurfer.getDecodedData();
-        if (!decodedData) {
-            console.error('No decoded data available');
-            showNotification('Audio data not fully loaded.', 'error');
-            return;
-        }
-
-        const duration = decodedData.duration;
-        const sampleRate = decodedData.sampleRate;
-        const numberOfChannels = decodedData.numberOfChannels;
-
-        console.log('=== AUDIO QUALITY DEBUG ===');
-        console.log('Original Audio Info:', {
-            duration,
-            sampleRate,
-            numberOfChannels,
-            totalSamples: decodedData.length,
-            length: decodedData.length
-        });
-
-        // Convert time to samples
-        const startSample = Math.floor(start * sampleRate);
-        const endSample = Math.floor(end * sampleRate);
-        const totalSamples = decodedData.length;
-
-        console.log('Sample range:', { startSample, endSample, totalSamples });
-
-        let newBuffer;
-
-        if (action === 'delete') {
-            console.log('Performing DELETE action');
-            // Cut logic: Keep [0...start] + [end...length]
-            const lengthBefore = startSample;
-            const lengthAfter = totalSamples - endSample;
-            const newLength = lengthBefore + lengthAfter;
-
-            console.log('Delete calculation:', { lengthBefore, lengthAfter, newLength });
-
-            if (newLength <= 0) {
-                console.error('Resulting audio would be empty');
-                showNotification('Resulting audio would be empty.', 'error');
-                return;
-            }
-
-            try {
-                // Use OfflineAudioContext to create buffer (prevents context limit errors)
-                const ctx = new OfflineAudioContext(numberOfChannels, newLength, sampleRate);
-                newBuffer = ctx.createBuffer(numberOfChannels, newLength, sampleRate);
-
-                for (let i = 0; i < numberOfChannels; i++) {
-                    const channelData = decodedData.getChannelData(i);
-                    const newChannelData = newBuffer.getChannelData(i);
-
-                    // Copy part 1
-                    newChannelData.set(channelData.subarray(0, startSample), 0);
-                    // Copy part 2
-                    newChannelData.set(channelData.subarray(endSample), startSample);
-                }
-                console.log('Delete buffer created successfully');
-            } catch (e) {
-                console.error('Error creating delete buffer:', e);
-                showNotification('Error processing audio: ' + e.message, 'error');
-                return;
-            }
-
-        } else if (action === 'trim') {
-            console.log('Performing TRIM action');
-            // Trim logic: Keep [start...end]
-            const newLength = endSample - startSample;
-            if (newLength <= 0) {
-                console.error('Invalid selection length');
-                showNotification('Invalid selection length.', 'error');
-                return;
-            }
-
-            try {
-                const ctx = new OfflineAudioContext(numberOfChannels, newLength, sampleRate);
-                newBuffer = ctx.createBuffer(numberOfChannels, newLength, sampleRate);
-
-                for (let i = 0; i < numberOfChannels; i++) {
-                    const channelData = decodedData.getChannelData(i);
-                    newBuffer.getChannelData(i).set(channelData.subarray(startSample, endSample), 0);
-                }
-                console.log('Trim buffer created successfully');
-            } catch (e) {
-                console.error('Error creating trim buffer:', e);
-                showNotification('Error processing audio: ' + e.message, 'error');
-                return;
-            }
-        } else {
-            console.error('Unknown action:', action);
-            return;
-        }
-
         try {
-            // Update player immediately for "instant" feel
-            console.log('Converting buffer to WAV blob');
-            const wavBlob = audioBufferToWav(newBuffer, { float32: true }); // Use 32-bit float for quality
-            const blobUrl = URL.createObjectURL(wavBlob);
+            // Call server-side editing endpoint (uses Pydub for perfect quality)
+            const endpoint = action === 'delete' ? '/api/edit/delete' : '/api/edit/trim';
 
-            console.log('Loading new audio into wavesurfer');
-            await wavesurfer.load(blobUrl);
+            showNotification('Processing...', 'info');
 
-            // Add edited audio to history
-            addToHistory(blobUrl);
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: filename,
+                    start: start,
+                    end: end
+                })
+            });
 
-            // Remove all regions after the new audio loads
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Edit failed');
+            }
+
+            const result = await response.json();
+            console.log('Server edit result:', result);
+
+            // Load the edited file
+            const newAudioUrl = `${API_BASE_URL}${result.url}`;
+            await wavesurfer.load(newAudioUrl);
+
+            // Add to history
+            addToHistory(newAudioUrl);
+
+            // Remove all regions
             wsRegions.clearRegions();
+
+            // Update download link
+            const downloadLink = document.getElementById('download-link');
+            if (downloadLink) {
+                downloadLink.href = result.url;
+                downloadLink.download = result.filename;
+            }
+
             showNotification('Audio edited successfully!', 'success');
 
-            // Background Upload to save persistence
-            console.log('Uploading edited audio');
-            uploadEditedAudio(newBuffer, filename);
         } catch (e) {
-            console.error('Error updating wavesurfer:', e);
-            showNotification('Error updating audio player: ' + e.message, 'error');
+            console.error('Error editing audio:', e);
+            showNotification('Error editing audio: ' + e.message, 'error');
         }
     }
 
