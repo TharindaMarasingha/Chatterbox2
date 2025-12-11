@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     let listenersAttached = false;
     let isGenerating = false;
     let wavesurfer = null;
+    let wsRegions = null; // Regions plugin instance
     let currentAudioBlobUrl = null;
     let saveStateTimeout = null;
 
@@ -77,6 +78,50 @@ document.addEventListener('DOMContentLoaded', async function () {
     const configStatus = document.getElementById('config-status');
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const audioPlayerContainer = document.getElementById('audio-player-container');
+
+    // Edit Audio Function
+    async function editAudio(action, start, end, filename) {
+        if (!filename) {
+            showNotification('No filename associated with this audio.', 'error');
+            return;
+        }
+        showLoadingOverlay();
+        loadingMessage.textContent = 'Processing audio...';
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/edit/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename, start, end })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Editing failed');
+            }
+
+            const data = await response.json();
+            // Reload the player with the new file
+            // We need to construct the URL. Data should contain the new filename or URL.
+            // Assuming the server returns { 'url': ..., 'filename': ... }
+            if (data.url) {
+                // Determine voice mode details from previous state or response
+                const resultDetails = {
+                    outputUrl: data.url,
+                    filename: data.filename,
+                    genTime: '0.00',
+                    submittedVoiceMode: currentVoiceMode
+                };
+                initializeWaveSurfer(data.url, resultDetails);
+                showNotification(`Audio ${action === 'delete' ? 'segment deleted' : 'trimmed'} successfully.`, 'success');
+            }
+
+        } catch (error) {
+            console.error('Audio Edit Error:', error);
+            showNotification(`Edit failed: ${error.message}`, 'error');
+        } finally {
+            hideLoadingOverlay();
+        }
+    }
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingMessage = document.getElementById('loading-message');
     const loadingStatusText = document.getElementById('loading-status');
@@ -501,6 +546,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             wavesurfer.unAll(); // Remove all event listeners before destroying
             wavesurfer.destroy();
             wavesurfer = null;
+            wsRegions = null;
         }
         if (currentAudioBlobUrl) {
             URL.revokeObjectURL(currentAudioBlobUrl);
@@ -532,6 +578,20 @@ document.addEventListener('DOMContentLoaded', async function () {
                             <span id="player-voice-file-details"></span>
                             <span class="mx-1">•</span> Gen Time: <span id="player-gen-time" class="font-medium tabular-nums">--s</span>
                             <span class="mx-1">•</span> Duration: <span id="audio-duration" class="font-medium tabular-nums">--:--</span>
+                        </div>
+                    </div>
+                    </div>
+                    
+                    <div class="mt-5 border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <h3 class="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">Edit Audio</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Drag on the waveform to select a region.</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="delete-region-btn" class="btn-secondary text-xs py-1.5 px-3">
+                                Delete Selected Part
+                            </button>
+                            <button id="trim-region-btn" class="btn-secondary text-xs py-1.5 px-3">
+                                Trim to Selected Part (Crop)
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -571,11 +631,50 @@ document.addEventListener('DOMContentLoaded', async function () {
         const pauseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mr-1.5"><path fill-rule="evenodd" d="M2 10a8 8 0 1 1 16 0 8 8 0 0 1-16 0Zm5-2.25A.75.75 0 0 1 7.75 7h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-4.5Z" clip-rule="evenodd" /></svg><span>Pause</span>`;
         const isDark = document.documentElement.classList.contains('dark');
 
+        // Initialize Regions Plugin
+        wsRegions = WaveSurfer.Regions.create();
+
         wavesurfer = WaveSurfer.create({
             container: waveformDiv, waveColor: isDark ? '#6366f1' : '#a5b4fc', progressColor: isDark ? '#4f46e5' : '#6366f1',
             cursorColor: isDark ? '#cbd5e1' : '#475569', barWidth: 3, barRadius: 3, cursorWidth: 1, height: 80, barGap: 2,
             responsive: true, url: audioUrl, mediaControls: false, normalize: true,
+            plugins: [wsRegions]
         });
+
+        // Add Regions events
+        wsRegions.on('region-created', region => {
+            // Ensure only one region exists for simple editing (optional, but good for UX)
+            // wsRegions.getRegions().forEach(r => { if (r !== region) r.remove(); });
+            region.setOptions({ color: 'rgba(99, 102, 241, 0.3)' });
+        });
+
+        // Edit Controls logic
+        const deleteRegionBtn = document.getElementById('delete-region-btn');
+        const trimRegionBtn = document.getElementById('trim-region-btn');
+
+        if (deleteRegionBtn) {
+            deleteRegionBtn.onclick = async () => {
+                const regions = wsRegions.getRegions();
+                if (regions.length === 0) {
+                    showNotification('Please select a region to delete.', 'warning');
+                    return;
+                }
+                const region = regions[0]; // Take the first one
+                await editAudio('delete', region.start, region.end, resultDetails.filename);
+            };
+        }
+
+        if (trimRegionBtn) {
+            trimRegionBtn.onclick = async () => {
+                const regions = wsRegions.getRegions();
+                if (regions.length === 0) {
+                    showNotification('Please select a region to trim to.', 'warning');
+                    return;
+                }
+                const region = regions[0];
+                await editAudio('trim', region.start, region.end, resultDetails.filename);
+            };
+        }
 
         wavesurfer.on('ready', () => {
             const duration = wavesurfer.getDuration();
