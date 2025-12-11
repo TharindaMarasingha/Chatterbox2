@@ -1277,7 +1277,14 @@ document.addEventListener('DOMContentLoaded', async function () {
         const sampleRate = decodedData.sampleRate;
         const numberOfChannels = decodedData.numberOfChannels;
 
-        console.log('Audio info:', { duration, sampleRate, numberOfChannels, totalSamples: decodedData.length });
+        console.log('=== AUDIO QUALITY DEBUG ===');
+        console.log('Original Audio Info:', {
+            duration,
+            sampleRate,
+            numberOfChannels,
+            totalSamples: decodedData.length,
+            length: decodedData.length
+        });
 
         // Convert time to samples
         const startSample = Math.floor(start * sampleRate);
@@ -1417,6 +1424,13 @@ document.addEventListener('DOMContentLoaded', async function () {
         var sampleRate = buffer.sampleRate;
         var format = opt.float32 ? 3 : 1;
         var bitDepth = format === 3 ? 32 : 16;
+
+        console.log('WAV Encoding:', {
+            numChannels,
+            sampleRate,
+            format: format === 3 ? '32-bit float' : '16-bit PCM',
+            bitDepth
+        });
 
         var result;
         if (numChannels === 2) {
